@@ -103,3 +103,39 @@ def compute_full_state(sg: SentinelGraph) -> dict:
         "zones": zones_out,
         "devices": devices_out,
     }
+
+import copy
+
+@dataclass
+class RiskItem:
+    device: str
+    label: str
+    score_delta: int
+    affected_zones: list[str]
+
+def simulate_failure(sg: SentinelGraph, device_id: str) -> tuple[int, list[str]]:
+    cloned_devices = copy.deepcopy(sg.devices)
+    cloned_graph = sg.graph.copy()
+    _propagate_failure(cloned_graph, cloned_devices, device_id)
+    before = compute_building_score(compute_zone_scores(sg), sg.zones, sg.devices)
+    zone_scores_after = {z.id: _zone_score(z, cloned_devices) for z in sg.zones}
+    after = compute_building_score(zone_scores_after, sg.zones, cloned_devices)
+    affected = [z.label for z in sg.zones if _zone_score(z, cloned_devices) < _zone_score(z, sg.devices)]
+    return (after - before), affected
+
+def _propagate_failure(graph: nx.DiGraph, devices: dict[str, DeviceState], device_id: str):
+    if device_id not in devices: return
+    devices[device_id].status = "offline"
+    for ancestor in nx.ancestors(graph, device_id):
+        if devices.get(ancestor) and devices[ancestor].type == "camera":
+            devices[ancestor].status = "offline"
+
+def compute_latent_risks(sg: SentinelGraph) -> list[RiskItem]:
+    results: list[RiskItem] = []
+    for dev in sg.devices.values():
+        if dev.type == "camera" or dev.status == "offline": continue
+        delta, affected = simulate_failure(sg, dev.id)
+        if delta != 0:
+            results.append(RiskItem(device=dev.id, label=dev.label, score_delta=delta, affected_zones=affected))
+    results.sort(key=lambda r: r.score_delta)
+    return results[:3]
