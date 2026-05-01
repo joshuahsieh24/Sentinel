@@ -1,0 +1,4 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+networkx==3.4.2
+websockets==14.1
