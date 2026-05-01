@@ -28,11 +28,22 @@
 </html>
 <script>
 let ws;
+let targetScore = null; 
+let displayScore = 0; 
+function animateScore() { 
+  if (targetScore === null) return; 
+  const diff = targetScore - displayScore; 
+  if (Math.abs(diff) < 0.5) { displayScore = targetScore; } 
+  else { displayScore += diff * 0.1; } 
+  document.getElementById("score-value").textContent = Math.round(displayScore); 
+  requestAnimationFrame(animateScore); 
+} 
+
 function connectWS() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'state') console.log('state', msg);
+    if (msg.type === 'state') targetScore = msg.building_score; animateScore();
     else if (msg.type === 'event') console.log('event', msg);
   };
 }
