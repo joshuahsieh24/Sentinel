@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="https://cdn.tailwindcss.com"></script>
+<title>Sentinel</title>
+<style>
+  :root { --bg: #0b0e13; --surface: #141821; --text: #e2e6ee; }
+  body { background: var(--bg); color: var(--text); font-family: sans-serif; }
+</style>
+</head>
+<body>
+<div id="header" style="display:flex; justify-content:space-between; padding:20px; background:var(--surface);">
+  <div style="text-transform:uppercase; letter-spacing:0.1em;">Sentinel</div>
+  <div id="score-block"><span id="score-value" style="font-size:48px;">--</span></div>
+</div>
+<div id="main" style="display:flex; height:calc(100vh - 88px);">
+  <div id="left-panel" style="width:60%; border-right:1px solid rgba(255,255,255,0.1);"></div>
+  <div id="right-panel" style="width:40%;"></div>
+</div>
+</body>
+</html>

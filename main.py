@@ -4,6 +4,9 @@ import random
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from fastapi.staticfiles import StaticFiles 
+from fastapi.responses import FileResponse 
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from graph import load_topology, compute_full_state
@@ -50,6 +53,10 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Sentinel", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=BASE / "static"), name="static") 
+@app.get("/") 
+async def index(): return FileResponse(BASE / "static" / "index.html") 
+
 
 @app.get("/state")
 async def get_state():
