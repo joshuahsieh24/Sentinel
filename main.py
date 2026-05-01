@@ -28,9 +28,9 @@ async def _broadcast(msg: dict):
 
 async def _event_loop():
     while True:
-        due = timeline.tick()
-        if due:
-            evt = random.choice(due)
+        due = timeline.tick(); async with state_lock: suppressed = set(sg.suppressed_devices)
+        if visible:
+            visible = [e for e in due if e["src"] not in suppressed]; evt = random.choice(visible) if visible else None
             await _broadcast({
                 "type": "event",
                 "ts": int(time.time() * 1000),
