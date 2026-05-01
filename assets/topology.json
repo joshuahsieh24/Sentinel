@@ -1,0 +1,24 @@
+{
+  "devices": [
+    {"id": "cam-1", "type": "camera", "zone": "lobby", "criticality": 1.0, "label": "Cam-1"},
+    {"id": "cam-2", "type": "camera", "zone": "loading_dock", "criticality": 1.2, "label": "Cam-2"},
+    {"id": "cam-3", "type": "camera", "zone": "server_room", "criticality": 1.5, "label": "Cam-3"},
+    {"id": "switch-a", "type": "switch", "label": "Switch-A"},
+    {"id": "switch-b", "type": "switch", "label": "Switch-B"},
+    {"id": "uplink", "type": "uplink", "label": "Uplink"},
+    {"id": "gateway", "type": "router", "label": "Gateway"}
+  ],
+  "edges": [
+    {"src": "cam-1", "dst": "switch-a"},
+    {"src": "cam-2", "dst": "switch-a"},
+    {"src": "cam-3", "dst": "switch-b"},
+    {"src": "switch-a", "dst": "uplink"},
+    {"src": "switch-b", "dst": "uplink"},
+    {"src": "uplink", "dst": "gateway"}
+  ],
+  "zones": [
+    {"id": "lobby", "label": "Lobby", "cameras": ["cam-1"]},
+    {"id": "loading_dock", "label": "Loading Dock", "cameras": ["cam-2"]},
+    {"id": "server_room", "label": "Server Room", "cameras": ["cam-3"]}
+  ]
+}
