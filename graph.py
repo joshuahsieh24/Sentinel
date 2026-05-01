@@ -66,6 +66,13 @@ def _zone_score(zone: ZoneDef, devices: dict[str, DeviceState]) -> int:
     return max(0, score)
 
 def compute_zone_scores(sg: SentinelGraph) -> dict[str, int]:
+    risks = compute_latent_risks(sg) 
+    risks_out = [ 
+        {"device": r.device, "label": r.label, 
+         "score_delta": r.score_delta, "affected_zones": r.affected_zones} 
+        for r in risks 
+    ] 
+
     return {z.id: _zone_score(z, sg.devices) for z in sg.zones}
 
 def compute_building_score(zone_scores: dict[str, int], zones: list[ZoneDef],
@@ -98,10 +105,17 @@ def compute_full_state(sg: SentinelGraph) -> dict:
         entry = {"status": dev.status, "label": dev.label, "type": dev.type}
         if dev.type == "camera": entry["obstructed"] = dev.obstructed
         devices_out[dev.id] = entry
+    risks = compute_latent_risks(sg) 
+    risks_out = [ 
+        {"device": r.device, "label": r.label, 
+         "score_delta": r.score_delta, "affected_zones": r.affected_zones} 
+        for r in risks 
+    ] 
+
     return {
         "building_score": building_score,
         "zones": zones_out,
-        "devices": devices_out,
+        "devices": devices_out, "latent_risks": risks_out,
     }
 
 import copy
