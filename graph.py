@@ -67,3 +67,39 @@ def _zone_score(zone: ZoneDef, devices: dict[str, DeviceState]) -> int:
 
 def compute_zone_scores(sg: SentinelGraph) -> dict[str, int]:
     return {z.id: _zone_score(z, sg.devices) for z in sg.zones}
+
+def compute_building_score(zone_scores: dict[str, int], zones: list[ZoneDef],
+                           devices: dict[str, DeviceState]) -> int:
+    total_weight = sum(devices[z.cameras[0]].criticality if z.cameras else 1.0 for z in zones)
+    weighted_sum = 0.0
+    for z in zones:
+        cam_criticality = devices[z.cameras[0]].criticality if z.cameras else 1.0
+        weighted_sum += zone_scores[z.id] * cam_criticality
+    return round(weighted_sum / total_weight)
+
+def _status_label(score: int) -> str:
+    if score >= 80: return "healthy"
+    if score >= 50: return "degraded"
+    return "exposed"
+
+def compute_full_state(sg: SentinelGraph) -> dict:
+    zone_scores = compute_zone_scores(sg)
+    building_score = compute_building_score(zone_scores, sg.zones, sg.devices)
+    zones_out = {}
+    for z in sg.zones:
+        zones_out[z.id] = {
+            "score": zone_scores[z.id],
+            "status": _status_label(zone_scores[z.id]),
+            "label": z.label,
+            "cameras": z.cameras,
+        }
+    devices_out = {}
+    for dev in sg.devices.values():
+        entry = {"status": dev.status, "label": dev.label, "type": dev.type}
+        if dev.type == "camera": entry["obstructed"] = dev.obstructed
+        devices_out[dev.id] = entry
+    return {
+        "building_score": building_score,
+        "zones": zones_out,
+        "devices": devices_out,
+    }
