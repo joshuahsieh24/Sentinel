@@ -26,3 +26,15 @@
 </div>
 </body>
 </html>
+<script>
+let ws;
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') console.log('state', msg);
+    else if (msg.type === 'event') console.log('event', msg);
+  };
+}
+connectWS();
+</script>
