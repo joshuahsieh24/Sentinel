@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Optional
 import networkx as nx
 
+PENALTY_OFFLINE = 40
+PENALTY_OBSTRUCTED = 30
+SOLO_MULTIPLIER = 2
+
 @dataclass
 class DeviceState:
     id: str
@@ -47,3 +51,19 @@ def load_topology(path: str | Path) -> SentinelGraph:
         g.add_edge(e["src"], e["dst"])
     zones = [ZoneDef(z["id"], z["label"], z["cameras"]) for z in data["zones"]]
     return SentinelGraph(graph=g, devices=devices, zones=zones)
+
+def _zone_score(zone: ZoneDef, devices: dict[str, DeviceState]) -> int:
+    score = 100
+    solo = len(zone.cameras) == 1
+    for cam_id in zone.cameras:
+        dev = devices.get(cam_id)
+        if dev is None: continue
+        if dev.status == "offline":
+            mult = SOLO_MULTIPLIER if solo else 1
+            score -= PENALTY_OFFLINE * mult
+        elif dev.obstructed:
+            score -= PENALTY_OBSTRUCTED
+    return max(0, score)
+
+def compute_zone_scores(sg: SentinelGraph) -> dict[str, int]:
+    return {z.id: _zone_score(z, sg.devices) for z in sg.zones}
