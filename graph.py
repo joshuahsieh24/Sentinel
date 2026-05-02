@@ -1,3 +1,7 @@
+""" 
+Sentinel dependency graph and logic. 
+""" 
+
 import json
 import copy
 import networkx as nx
