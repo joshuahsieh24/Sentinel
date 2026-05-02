@@ -30,6 +30,13 @@
 let ws;
 let targetScore = null; 
 let displayScore = 0; 
+function renderZones(zones) { 
+  for (const id in zones) { 
+    const el = document.getElementById("zone-" + id); 
+    if (el) el.style.stroke = zones[id].status === "healthy" ? "#4ade80" : "#ef4444"; 
+  } 
+} 
+
 function animateScore() { 
   if (targetScore === null) return; 
   const diff = targetScore - displayScore; 
@@ -43,7 +50,7 @@ function connectWS() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'state') targetScore = msg.building_score; animateScore();
+    if (msg.type === 'state') targetScore = msg.building_score; renderZones(msg.zones); animateScore();
     else if (msg.type === 'event') console.log('event', msg);
   };
 }
