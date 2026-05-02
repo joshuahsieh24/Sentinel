@@ -93,3 +93,10 @@ async def action_fail_switch_a():
         apply_fail_switch_a(sg)
     asyncio.create_task(_delayed_fail_commit())
     return JSONResponse({"ok": True}, status_code=202)
+
+@app.post("/action/apply-fix")
+async def action_apply_fix():
+    async with state_lock:
+        from graph import apply_fix
+        apply_fix(sg)
+    return {"ok": True}

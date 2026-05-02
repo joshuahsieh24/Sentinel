@@ -118,3 +118,12 @@ def apply_fail_switch_a_commit(sg: SentinelGraph):
     sg.devices["switch-a"].status = "offline"
     sg.devices["cam-1"].status = "offline"; sg.devices["cam-2"].status = "offline"
     sg.incident = run_rca(sg, ["cam-1", "cam-2"])
+
+def apply_fix(sg: SentinelGraph):
+    if not sg.incident or sg.incident.fix_applied: return False
+    sg.graph.add_edge("cam-2", "switch-b")
+    sg.fix_edge_added = True
+    sg.devices["cam-2"].status = "online"
+    sg.suppressed_devices.discard("cam-2")
+    sg.incident.fix_applied = True
+    return True
