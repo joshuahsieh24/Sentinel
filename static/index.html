@@ -2,87 +2,654 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script src="https://cdn.tailwindcss.com"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sentinel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-  :root { --bg: #0b0e13; --surface: #141821; --text: #e2e6ee; }
-  body { background: var(--bg); color: var(--text); font-family: sans-serif; }
+  :root {
+    --bg:       #0b0e13;
+    --surface:  #141821;
+    --border:   rgba(255,255,255,0.08);
+    --text:     #e2e6ee;
+    --muted:    #6b7280;
+    --healthy:  #4ade80;
+    --degraded: #fbbf24;
+    --exposed:  #ef4444;
+    --accent:   #8aaccc;
+    --ease:     cubic-bezier(0.16,1,0.3,1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; overflow: hidden; }
+
+  /* ---- header ---- */
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; height: 56px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #wordmark {
+    font-size: 14px; font-weight: 500; letter-spacing: 0.12em;
+    color: var(--text); text-transform: uppercase;
+  }
+  #header-right { display: flex; align-items: center; gap: 20px; }
+  #score-block { display: flex; align-items: baseline; gap: 6px; }
+  #score-value {
+    font-size: 64px; font-weight: 600; line-height: 1;
+    transition: color 400ms var(--ease);
+    font-variant-numeric: tabular-nums;
+  }
+  #score-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  #live-badge {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--healthy); border: 1px solid rgba(74,222,128,0.3);
+    border-radius: 3px; padding: 2px 7px; font-weight: 500;
+  }
+  #live-badge.offline { color: var(--muted); border-color: var(--border); }
+  #mute-btn {
+    font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 10px; cursor: pointer; letter-spacing: 0.04em;
+    transition: color 200ms, border-color 200ms;
+  }
+  #mute-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  #mute-btn.muted { color: var(--exposed); border-color: var(--exposed); }
+
+  /* ---- layout ---- */
+  #main {
+    display: flex; height: calc(100vh - 56px - 52px);
+  }
+  #left-panel {
+    width: 60%; border-right: 1px solid var(--border);
+    padding: 20px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  #right-panel {
+    width: 40%; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- floor plan SVG ---- */
+  #floorplan {
+    flex: 1; width: 100%;
+  }
+  .zone-rect {
+    fill: rgba(74,222,128,0.06); stroke: var(--healthy); stroke-width: 1.5;
+    transition: fill 400ms var(--ease), stroke 400ms var(--ease);
+  }
+  .zone-rect.degraded { fill: rgba(251,191,36,0.08); stroke: var(--degraded); }
+  .zone-rect.exposed  { fill: rgba(239,68,68,0.10);  stroke: var(--exposed); }
+  .zone-label { fill: var(--muted); font-size: 10px; font-family: 'Inter',sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-anchor: middle; }
+  .cam-icon { fill: var(--accent); transition: fill 300ms; }
+  .cam-icon.obstructed { fill: var(--degraded); }
+  .cam-icon.offline    { fill: var(--muted); }
+  .fov-cone { fill: var(--accent); opacity: 0.08; transition: fill 300ms, opacity 300ms; }
+  .fov-cone.obstructed { fill: var(--degraded); }
+  .fov-cone.offline    { opacity: 0; }
+  .obstruct-x { stroke: var(--degraded); stroke-width: 2; opacity: 0; transition: opacity 300ms; }
+  .obstruct-x.visible  { opacity: 1; }
+  .net-line { stroke: rgba(138,172,204,0.25); stroke-width: 1; }
+  .net-line.offline { stroke: rgba(239,68,68,0.3); stroke-dasharray: 4 3; }
+  .net-line.fix-added { stroke: rgba(74,222,128,0.4); stroke-dasharray: none; }
+  .node-circle { fill: var(--surface); stroke: rgba(138,172,204,0.4); stroke-width: 1.5; }
+  .node-circle.offline { stroke: var(--exposed); }
+  .node-label { fill: var(--muted); font-size: 9px; font-family: 'Inter',sans-serif; letter-spacing: 0.06em; text-anchor: middle; }
+  .blast-pulse { fill: none; stroke: var(--exposed); stroke-width: 2; opacity: 0; }
+
+  /* tracking dots */
+  /* Simulated tracking dots. Production would consume detection events from CV inference on camera streams. */
+  .tracking-dot { fill: var(--accent); opacity: 0.75; r: 4; transition: opacity 400ms; }
+  .tracking-dot.faded { opacity: 0; }
+
+  /* ---- right panel sections ---- */
+  .rpanel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+  }
+  .rpanel-title {
+    font-size: 10px; color: var(--muted); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  /* risks */
+  .risk-item { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .risk-item:last-child { margin-bottom: 0; }
+  .risk-device { font-size: 12px; font-weight: 500; color: var(--text); }
+  .risk-zones { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .risk-delta {
+    font-size: 18px; font-weight: 600; color: var(--exposed);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* incident panel */
+  #incident-panel {
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    max-height: 0; overflow: hidden;
+    opacity: 0; transform: translateY(8px);
+    transition: max-height 400ms var(--ease), opacity 400ms var(--ease), transform 400ms var(--ease), padding 300ms;
+  }
+  #incident-panel.visible {
+    max-height: 300px; opacity: 1; transform: translateY(0);
+    padding: 16px 20px;
+  }
+  #incident-title { font-size: 10px; color: var(--exposed); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+  #incident-summary { font-size: 12px; line-height: 1.6; color: var(--text); margin-bottom: 12px; }
+  #recommendation-card {
+    background: rgba(138,172,204,0.06); border: 1px solid rgba(138,172,204,0.15);
+    border-radius: 6px; padding: 12px; margin-bottom: 12px;
+  }
+  #recommendation-card .rec-label { font-size: 9px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  #recommendation-card .rec-text { font-size: 11px; color: var(--text); line-height: 1.6; }
+
+  /* event log */
+  #event-log-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 16px 20px; }
+  #event-log {
+    flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px; font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 10.5px;
+    line-height: 1.7; color: var(--muted);
+  }
+  #event-log::-webkit-scrollbar { width: 4px; }
+  #event-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  .evt-entry { opacity: 0; animation: fadeIn 300ms var(--ease) forwards; }
+  .evt-ts { color: rgba(138,172,204,0.5); }
+  .evt-type { font-weight: 600; }
+  .evt-type.RTP   { color: #6ee7b7; }
+  .evt-type.ARP   { color: #a78bfa; }
+  .evt-type.ICMP  { color: #93c5fd; }
+  .evt-type.DHCP  { color: #fcd34d; }
+  .evt-src  { color: var(--accent); }
+  @keyframes fadeIn { from { opacity:0; transform: translateX(-4px); } to { opacity:1; transform: none; } }
+
+  /* ---- footer ---- */
+  #footer {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    height: 52px; padding: 0 24px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .ctrl-btn {
+    font-size: 11px; letter-spacing: 0.05em;
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 4px; padding: 6px 16px; cursor: pointer;
+    transition: color 200ms, border-color 200ms, background 200ms;
+  }
+  .ctrl-btn:hover:not(:disabled) { color: var(--text); border-color: rgba(255,255,255,0.22); }
+  .ctrl-btn.danger { border-color: rgba(239,68,68,0.35); color: var(--exposed); }
+  .ctrl-btn.danger:hover:not(:disabled) { background: rgba(239,68,68,0.08); border-color: var(--exposed); }
+  .ctrl-btn.primary { border-color: rgba(138,172,204,0.4); color: var(--accent); }
+  .ctrl-btn.primary:hover:not(:disabled) { background: rgba(138,172,204,0.08); border-color: var(--accent); }
+  .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
 </head>
 <body>
-<div id="header" style="display:flex; justify-content:space-between; padding:20px; background:var(--surface);">
-  <div style="text-transform:uppercase; letter-spacing:0.1em;">Sentinel</div>
-  <div id="score-block"><span id="score-value" style="font-size:48px;">--</span></div>
+
+<!-- HEADER -->
+<div id="header">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="wordmark">Sentinel</span>
+    <span id="live-badge">Live</span>
+  </div>
+  <div id="header-right">
+    <div id="score-block">
+      <span id="score-value">--</span>
+      <span id="score-label">Coverage Score</span>
+    </div>
+    <button id="mute-btn" onclick="toggleMute()">Voice On</button>
+  </div>
 </div>
-<div id="main" style="display:flex; height:calc(100vh - 88px);">
-  <div id="left-panel" style="width:60%; border-right:1px solid rgba(255,255,255,0.1);"></div>
-<svg id="floorplan" viewBox="0 0 680 520" style="width:100%; height:100%;"> 
-<circle id="blast-pulse" cx="220" cy="379" r="17" fill="none" stroke="#ef4444" stroke-width="2" opacity="0" /> 
 
-  <rect id="zone-lobby" x="20" y="40" width="200" height="220" fill="rgba(74,222,128,0.05)" stroke="#4ade80" /> 
-  <rect id="zone-loading_dock" x="240" y="40" width="200" height="220" fill="rgba(74,222,128,0.05)" stroke="#4ade80" /> 
-  <rect id="zone-server_room" x="460" y="40" width="200" height="220" fill="rgba(74,222,128,0.05)" stroke="#4ade80" /> 
-</svg> 
+<!-- MAIN -->
+<div id="main">
 
-  <div id="right-panel" style="width:40%;"></div>
-<div id="event-log" style="flex:1; overflow-y:auto; padding:10px; font-family:monospace; font-size:10px; color:#6b7280;"></div> 
+  <!-- LEFT: Floor plan -->
+  <div id="left-panel">
+    <svg id="floorplan" viewBox="0 0 680 520" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
 
+      <!-- Zone backgrounds -->
+      <rect id="zone-lobby"        class="zone-rect" x="20"  y="40"  width="200" height="220" rx="6"/>
+      <rect id="zone-loading_dock" class="zone-rect" x="240" y="40"  width="200" height="220" rx="6"/>
+      <rect id="zone-server_room"  class="zone-rect" x="460" y="40"  width="200" height="220" rx="6"/>
+
+      <!-- Zone labels -->
+      <text class="zone-label" x="120" y="268">Lobby</text>
+      <text class="zone-label" x="340" y="268">Loading Dock</text>
+      <text class="zone-label" x="560" y="268">Server Room</text>
+
+      <!-- Network connection lines (draw before nodes so nodes sit on top) -->
+      <!-- cam-1 → switch-a -->
+      <line id="line-cam1-swA" class="net-line" x1="120" y1="148" x2="220" y2="362"/>
+      <!-- cam-2 → switch-a -->
+      <line id="line-cam2-swA" class="net-line" x1="340" y1="148" x2="220" y2="362"/>
+      <!-- cam-3 → switch-b -->
+      <line id="line-cam3-swB" class="net-line" x1="560" y1="148" x2="460" y2="362"/>
+      <!-- switch-a → uplink -->
+      <line id="line-swA-up"  class="net-line" x1="220" y1="396" x2="320" y2="430"/>
+      <!-- switch-b → uplink -->
+      <line id="line-swB-up"  class="net-line" x1="460" y1="396" x2="360" y2="430"/>
+      <!-- uplink → gateway -->
+      <line id="line-up-gw"   class="net-line" x1="340" y1="454" x2="340" y2="472"/>
+
+      <!-- Fix edge: cam-2 → switch-b (hidden until fix applied) -->
+      <line id="line-fix" class="net-line" x1="340" y1="148" x2="460" y2="362" stroke-dasharray="5 4" opacity="0" style="transition: opacity 500ms;"/>
+
+      <!-- Camera 1 (Lobby, cx=120 cy=130) -->
+      <g id="cam-1-g">
+        <polygon id="fov-1" class="fov-cone" points="120,148 90,215 150,215"/>
+        <circle id="cam-1-body" class="cam-icon" cx="120" cy="130" r="12"/>
+        <rect id="cam-1-lens" fill="#0b0e13" x="113" y="126" width="12" height="8" rx="2"/>
+        <rect id="cam-1-mount" fill="var(--accent)" x="117" y="140" width="6" height="8" rx="1"/>
+        <!-- obstruct X -->
+        <line class="obstruct-x" id="ox1a" x1="110" y1="120" x2="130" y2="140"/>
+        <line class="obstruct-x" id="ox1b" x1="130" y1="120" x2="110" y2="140"/>
+      </g>
+
+      <!-- Camera 2 (Loading Dock, cx=340 cy=130) -->
+      <g id="cam-2-g">
+        <polygon id="fov-2" class="fov-cone" points="340,148 310,215 370,215"/>
+        <circle id="cam-2-body" class="cam-icon" cx="340" cy="130" r="12"/>
+        <rect id="cam-2-lens" fill="#0b0e13" x="333" y="126" width="12" height="8" rx="2"/>
+        <rect id="cam-2-mount" fill="var(--accent)" x="337" y="140" width="6" height="8" rx="1"/>
+        <line class="obstruct-x" id="ox2a" x1="330" y1="120" x2="350" y2="140"/>
+        <line class="obstruct-x" id="ox2b" x1="350" y1="120" x2="330" y2="140"/>
+      </g>
+
+      <!-- Camera 3 (Server Room, cx=560 cy=130) -->
+      <g id="cam-3-g">
+        <polygon id="fov-3" class="fov-cone" points="560,148 530,215 590,215"/>
+        <circle id="cam-3-body" class="cam-icon" cx="560" cy="130" r="12"/>
+        <rect id="cam-3-lens" fill="#0b0e13" x="553" y="126" width="12" height="8" rx="2"/>
+        <rect id="cam-3-mount" fill="var(--accent)" x="557" y="140" width="6" height="8" rx="1"/>
+        <line class="obstruct-x" id="ox3a" x1="550" y1="120" x2="570" y2="140"/>
+        <line class="obstruct-x" id="ox3b" x1="570" y1="120" x2="550" y2="140"/>
+      </g>
+
+      <!-- Network nodes -->
+      <!-- Blast pulse ring (behind Switch-A node) -->
+      <circle id="blast-pulse" class="blast-pulse" cx="220" cy="379"/>
+
+      <!-- Switch-A -->
+      <g id="switcha-g">
+        <circle class="node-circle" id="switcha-circle" cx="220" cy="379" r="17"/>
+        <text class="node-label" x="220" y="383">SW-A</text>
+      </g>
+
+      <!-- Switch-B -->
+      <g id="switchb-g">
+        <circle class="node-circle" cx="460" cy="379" r="17"/>
+        <text class="node-label" x="460" y="383">SW-B</text>
+      </g>
+
+      <!-- Uplink -->
+      <circle class="node-circle" cx="340" cy="442" r="14"/>
+      <text class="node-label" x="340" y="446">UPLINK</text>
+
+      <!-- Gateway -->
+      <circle class="node-circle" cx="340" cy="484" r="12"/>
+      <text class="node-label" x="340" y="488">GW</text>
+
+      <!-- Tracking dots — scripted paths, not live CV -->
+      <!-- Simulated tracking dots. Production would consume detection events from CV inference on camera streams. -->
+      <circle id="dot-1" class="tracking-dot" cx="80"  cy="160" r="4"/>
+      <circle id="dot-2" class="tracking-dot" cx="300" cy="160" r="4"/>
+      <circle id="dot-3" class="tracking-dot" cx="520" cy="160" r="4"/>
+    </svg>
+  </div>
+
+  <!-- RIGHT panel -->
+  <div id="right-panel">
+
+    <!-- Top Latent Risks -->
+    <div class="rpanel-section">
+      <div class="rpanel-title">Top Latent Risks</div>
+      <div id="risks-list">
+        <div class="risk-item" style="color:var(--muted); font-size:11px;">Computing...</div>
+      </div>
+    </div>
+
+    <!-- Active Incident -->
+    <div id="incident-panel">
+      <div id="incident-title">Active Incident</div>
+      <div id="incident-summary"></div>
+      <div id="recommendation-card">
+        <div class="rec-label">Recommended Action</div>
+        <div id="rec-text" class="rec-text"></div>
+      </div>
+    </div>
+
+    <!-- Network Events Log -->
+    <div id="event-log-section">
+      <div class="rpanel-title">Network Events</div>
+      <div id="event-log"><div style="color:var(--muted);font-size:10.5px;padding:4px 2px;">Awaiting traffic...</div></div>
+    </div>
+
+  </div>
 </div>
-</body>
-</html>
+
+<!-- FOOTER -->
+<div id="footer">
+  <button class="ctrl-btn" id="btn-obstruct" onclick="doAction('obstruct-cam2')">Obstruct Cam-2</button>
+  <button class="ctrl-btn danger" id="btn-fail" onclick="doAction('fail-switch-a')">Simulate Switch-A Failure</button>
+  <button class="ctrl-btn primary" id="btn-fix" onclick="doAction('apply-fix')" disabled>Apply Recommended Fix</button>
+  <button class="ctrl-btn" id="btn-reset" onclick="doAction('reset')">Reset</button>
+</div>
+
 <script>
-function triggerBlast() { 
-  const el = document.getElementById("blast-pulse"); 
-  el.setAttribute("opacity", "1"); 
-  let r = 17; 
-  const iv = setInterval(() => { 
-    r += 2; el.setAttribute("r", r); 
-    const op = parseFloat(el.getAttribute("opacity")) - 0.05; 
-    el.setAttribute("opacity", op); 
-    if (op <= 0) { clearInterval(iv); el.setAttribute("r", 17); } 
-  }, 20); 
-} 
+// ---- Globals ----
+let muted = false;
+let displayScore = null;
+let targetScore = null;
+let prevState = null;
+const MAX_LOG_ENTRIES = 20;
 
-function speak(text) { 
-  if (!window.speechSynthesis) return; 
-  const u = new SpeechSynthesisUtterance(text); 
-  window.speechSynthesis.speak(u); 
-} 
+function toggleMute() {
+  muted = !muted;
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = muted ? 'Voice Off' : 'Voice On';
+  btn.classList.toggle('muted', muted);
+}
 
+function speak(text) {
+  if (muted || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.92;
+  window.speechSynthesis.speak(u);
+}
+
+// ---- Score animation ----
+function animateScore() {
+  if (targetScore === null) return;
+  if (displayScore === null) displayScore = targetScore;
+  const diff = targetScore - displayScore;
+  if (Math.abs(diff) < 0.5) {
+    displayScore = targetScore;
+    renderScore(Math.round(displayScore));
+    return;
+  }
+  displayScore += diff * 0.12;
+  renderScore(Math.round(displayScore));
+  requestAnimationFrame(animateScore);
+}
+
+function renderScore(val) {
+  const el = document.getElementById('score-value');
+  el.textContent = val;
+  if (val >= 80) el.style.color = 'var(--healthy)';
+  else if (val >= 50) el.style.color = 'var(--degraded)';
+  else el.style.color = 'var(--exposed)';
+}
+
+function setScore(val) {
+  const wasRunning = targetScore !== null && Math.abs(targetScore - (displayScore ?? val)) > 0.5;
+  targetScore = val;
+  if (!wasRunning) requestAnimationFrame(animateScore);
+}
+
+// ---- Zone rendering ----
+const ZONE_IDS = ['lobby', 'loading_dock', 'server_room'];
+
+function renderZones(zones) {
+  for (const [id, zone] of Object.entries(zones)) {
+    const rect = document.getElementById('zone-' + id);
+    if (!rect) continue;
+    const extra = zone.status === 'healthy' ? '' : ' ' + zone.status;
+    rect.className.baseVal = 'zone-rect' + extra;
+  }
+}
+
+// ---- Camera rendering ----
+function renderDevices(devices) {
+  ['cam-1', 'cam-2', 'cam-3'].forEach(camId => {
+    const dev = devices[camId];
+    if (!dev) return;
+    const shortId = camId.replace('-', '');  // cam1, cam2, cam3
+    const num = camId.split('-')[1];         // 1, 2, 3
+    const body  = document.getElementById(camId + '-body');
+    const mount = document.getElementById(camId + '-mount');
+    const fov   = document.getElementById('fov-' + num);
+    const xa    = document.getElementById('ox' + num + 'a');
+    const xb    = document.getElementById('ox' + num + 'b');
+    if (!body) return;
+
+    const offline = dev.status === 'offline';
+    const obstructed = dev.obstructed && !offline;
+
+    body.className.baseVal = 'cam-icon' + (offline ? ' offline' : obstructed ? ' obstructed' : '');
+    if (mount) mount.setAttribute('fill', offline ? 'var(--muted)' : obstructed ? 'var(--degraded)' : 'var(--accent)');
+    if (fov) fov.className.baseVal = 'fov-cone' + (offline ? ' offline' : obstructed ? ' obstructed' : '');
+    if (xa) xa.className.baseVal = 'obstruct-x' + (obstructed ? ' visible' : '');
+    if (xb) xb.className.baseVal = 'obstruct-x' + (obstructed ? ' visible' : '');
+  });
+
+  // Switch-A node coloring
+  const swA = devices['switch-a'];
+  const swACircle = document.getElementById('switcha-circle');
+  if (swA && swACircle) {
+    swACircle.className.baseVal = 'node-circle' + (swA.status === 'offline' ? ' offline' : '');
+  }
+}
+
+// ---- Network lines ----
+function renderNetLines(devices, fixAvailable, fixApplied) {
+  const swAoff = devices['switch-a']?.status === 'offline';
+  const cam1off = devices['cam-1']?.status === 'offline';
+  const cam2off = devices['cam-2']?.status === 'offline';
+  const cam3off = devices['cam-3']?.status === 'offline';
+
+  setLineState('line-cam1-swA', cam1off || swAoff);
+  setLineState('line-cam2-swA', cam2off || swAoff);
+  setLineState('line-cam3-swB', cam3off);
+  setLineState('line-swA-up', swAoff);
+  setLineState('line-swB-up', false);
+  setLineState('line-up-gw', false);
+
+  // Fix edge — only show after topology fix is actually applied
+  const fixLine = document.getElementById('line-fix');
+  if (fixLine) fixLine.style.opacity = fixApplied ? '1' : '0';
+}
+
+function setLineState(id, offline) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className.baseVal = 'net-line' + (offline ? ' offline' : '');
+}
+
+// ---- Blast pulse (JS-animated SVG circle) ----
+function triggerBlast() {
+  const el = document.getElementById('blast-pulse');
+  if (!el) return;
+  let start = null;
+  const dur = 1100;
+  function frame(ts) {
+    if (!start) start = ts;
+    const t = Math.min((ts - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    el.setAttribute('r', (12 + 44 * ease).toFixed(1));
+    el.setAttribute('opacity', (0.9 * (1 - ease)).toFixed(3));
+    if (t < 1) requestAnimationFrame(frame);
+    else { el.setAttribute('r', 12); el.setAttribute('opacity', 0); }
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---- Incident panel ----
+function renderIncident(incident) {
+  const panel = document.getElementById('incident-panel');
+  if (!incident) {
+    panel.classList.remove('visible');
+    return;
+  }
+  document.getElementById('incident-summary').textContent = incident.summary;
+  document.getElementById('rec-text').textContent = incident.recommendation;
+  // Trigger visibility in next frame so CSS transition fires
+  requestAnimationFrame(() => panel.classList.add('visible'));
+}
+
+// ---- Risks panel ----
+function renderRisks(risks) {
+  const list = document.getElementById('risks-list');
+  if (!risks || risks.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:11px;">No latent risks detected</div>';
+    return;
+  }
+  list.innerHTML = risks.map(r => `
+    <div class="risk-item">
+      <div>
+        <div class="risk-device">${r.label}</div>
+        <div class="risk-zones">${r.affected_zones.join(', ')}</div>
+      </div>
+      <div class="risk-delta">${r.score_delta}</div>
+    </div>
+  `).join('');
+}
+
+// ---- Tracking dots (pure JS path animation) ----
+// Simulated tracking dots. Production would consume detection events from CV inference on camera streams.
+const DOT_WAYPOINTS = {
+  '1': [[80,150],[150,190],[160,165],[140,220],[90,200],[50,180],[80,150]],
+  '2': [[300,155],[370,185],[375,165],[355,220],[310,205],[270,185],[300,155]],
+  '3': [[520,155],[590,190],[585,170],[570,220],[530,205],[490,185],[520,155]],
+};
+const DOT_PERIOD_MS = { '1': 8000, '2': 6000, '3': 10000 };
+const dotPhase = { '1': 0, '2': 0.33, '3': 0.66 };
+const dotFrozen = { '1': false, '2': false, '3': false };
+let lastDotTime = null;
+
+function lerpPath(waypoints, t) {
+  const n = waypoints.length - 1;
+  const seg = t * n;
+  const i = Math.min(Math.floor(seg), n - 1);
+  const f = seg - i;
+  const [ax, ay] = waypoints[i];
+  const [bx, by] = waypoints[i + 1];
+  return [ax + (bx - ax) * f, ay + (by - ay) * f];
+}
+
+function tickDots(ts) {
+  if (!lastDotTime) lastDotTime = ts;
+  const dt = ts - lastDotTime;
+  lastDotTime = ts;
+  for (const n of ['1','2','3']) {
+    if (!dotFrozen[n]) {
+      dotPhase[n] = (dotPhase[n] + dt / DOT_PERIOD_MS[n]) % 1;
+      const [x, y] = lerpPath(DOT_WAYPOINTS[n], dotPhase[n]);
+      const dot = document.getElementById('dot-' + n);
+      if (dot) { dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1)); }
+    }
+  }
+  requestAnimationFrame(tickDots);
+}
+requestAnimationFrame(tickDots);
+
+function renderDots(devices) {
+  ['1','2','3'].forEach(n => {
+    const cam = devices['cam-' + n];
+    const dot = document.getElementById('dot-' + n);
+    if (!dot || !cam) return;
+    if (cam.status === 'offline') {
+      dot.classList.add('faded');
+      dotFrozen[n] = true;
+    } else if (cam.obstructed) {
+      dotFrozen[n] = true;  // freeze position
+      dot.classList.remove('faded');
+    } else {
+      dotFrozen[n] = false;
+      dot.classList.remove('faded');
+    }
+  });
+}
+
+// ---- Full state render ----
+function applyState(state) {
+  setScore(state.building_score);
+  renderZones(state.zones);
+  renderDevices(state.devices);
+  renderNetLines(state.devices, state.fix_available, state.incident?.fix_applied ?? false);
+  renderIncident(state.incident);
+  renderRisks(state.latent_risks);
+  renderDots(state.devices);
+
+  // Button states
+  document.getElementById('btn-fix').disabled = !state.fix_available;
+
+  // Voice alerts on transitions
+  if (prevState !== null) {
+    const wasHealthy = prevState.incident === null;
+    const nowHasIncident = state.incident !== null;
+    const prevObstructed = prevState.devices?.['cam-2']?.obstructed ?? false;
+    const nowObstructed = state.devices?.['cam-2']?.obstructed ?? false;
+    const prevSwA = prevState.devices?.['switch-a']?.status;
+    const nowSwA = state.devices?.['switch-a']?.status;
+
+    if (!prevObstructed && nowObstructed) {
+      speak('Loading Dock coverage compromised');
+    }
+
+    if (prevSwA !== 'offline' && nowSwA === 'offline') {
+      triggerBlast();
+      speak('Cascading failure detected. Two zones exposed.');
+    }
+
+    if (prevState.incident?.fix_applied === false && state.incident?.fix_applied === true) {
+      speak('Mitigation applied. Loading Dock coverage restored.');
+    }
+  }
+
+  prevState = state;
+}
+
+// ---- Network event log ----
+function appendEvent(evt) {
+  const log = document.getElementById('event-log');
+  const ts = new Date(evt.ts).toISOString().substring(11, 23);
+  const div = document.createElement('div');
+  div.className = 'evt-entry';
+  div.innerHTML = `<span class="evt-ts">${ts}</span> <span class="evt-type ${evt.event_type}">${evt.event_type.padEnd(4)}</span> <span class="evt-src">${evt.src.padEnd(7)}</span> <span style="color:var(--muted)">${evt.summary}</span>`;
+  log.appendChild(div);
+  // Trim to max entries
+  while (log.children.length > MAX_LOG_ENTRIES) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ---- WebSocket ----
 let ws;
-let targetScore = null; 
-let displayScore = 0; 
-function appendEvent(evt) { 
-  const log = document.getElementById("event-log"); 
-  const div = document.createElement("div"); 
-  div.textContent = `[${new Date().toLocaleTimeString()}] ${evt.src} -> ${evt.dst}: ${evt.summary}`; 
-  log.appendChild(div); 
-  log.scrollTop = log.scrollHeight; 
-} 
-
-function renderZones(zones) { 
-  for (const id in zones) { 
-    const el = document.getElementById("zone-" + id); 
-    if (el) el.style.stroke = zones[id].status === "healthy" ? "#4ade80" : "#ef4444"; 
-  } 
-} 
-
-function animateScore() { 
-  if (targetScore === null) return; 
-  const diff = targetScore - displayScore; 
-  if (Math.abs(diff) < 0.5) { displayScore = targetScore; } 
-  else { displayScore += diff * 0.1; } 
-  document.getElementById("score-value").textContent = Math.round(displayScore); 
-  requestAnimationFrame(animateScore); 
-} 
-
 function connectWS() {
   ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    document.getElementById('live-badge')?.classList.remove('offline');
+  };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'state') targetScore = msg.building_score; renderZones(msg.zones); if (msg.incident) speak(msg.incident.summary); animateScore();
+    if (msg.type === 'state') applyState(msg);
     else if (msg.type === 'event') appendEvent(msg);
   };
+  ws.onclose = () => {
+    document.getElementById('live-badge')?.classList.add('offline');
+    setTimeout(connectWS, 1500);
+  };
+  ws.onerror = (e) => console.error('[sentinel] ws error', e);
 }
+
+// ---- Actions ----
+async function doAction(action) {
+  try {
+    await fetch(`/action/${action}`, { method: 'POST' });
+  } catch(e) {
+    console.error('action failed', e);
+  }
+}
+
+// ---- Init ----
 connectWS();
 </script>
+</body>
+</html>
