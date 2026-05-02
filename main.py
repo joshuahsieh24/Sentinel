@@ -59,6 +59,14 @@ async def index(): return FileResponse(BASE / "static" / "index.html")
 
 
 @app.get("/state")
+@app.post("/action/obstruct-cam2") 
+async def action_obstruct_cam2(): 
+    global _state_dirty 
+    async with state_lock: 
+        from graph import apply_obstruct_cam2 
+        apply_obstruct_cam2(sg) 
+    return {"ok": True} 
+
 async def get_state():
     async with state_lock:
         return JSONResponse(compute_full_state(sg))
