@@ -85,3 +85,11 @@ async def _delayed_fail_commit():
     async with state_lock:
         from graph import apply_fail_switch_a_commit
         apply_fail_switch_a_commit(sg)
+
+@app.post("/action/fail-switch-a")
+async def action_fail_switch_a():
+    async with state_lock:
+        from graph import apply_fail_switch_a
+        apply_fail_switch_a(sg)
+    asyncio.create_task(_delayed_fail_commit())
+    return JSONResponse({"ok": True}, status_code=202)
