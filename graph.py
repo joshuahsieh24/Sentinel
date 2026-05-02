@@ -110,3 +110,11 @@ def run_rca(sg: SentinelGraph, newly_offline_cameras: list[str]) -> Optional[Inc
     aff_zones = list(set(z.label for c in newly_offline_cameras for z in sg.zones if c in z.cameras))
     summary = f"{d_lbl} failure -> {len(newly_offline_cameras)} cameras offline -> {' and '.join(aff_zones)} lost verified coverage."
     return Incident(summary=summary, recommendation=f"Single point of failure: {d_lbl}. Deploy redundancy.", fix_applicable=True)
+
+def apply_fail_switch_a(sg: SentinelGraph):
+    sg.suppressed_devices.update(["cam-1", "cam-2", "switch-a"])
+
+def apply_fail_switch_a_commit(sg: SentinelGraph):
+    sg.devices["switch-a"].status = "offline"
+    sg.devices["cam-1"].status = "offline"; sg.devices["cam-2"].status = "offline"
+    sg.incident = run_rca(sg, ["cam-1", "cam-2"])

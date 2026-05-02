@@ -79,3 +79,9 @@ async def websocket_endpoint(ws: WebSocket):
         while True: await ws.receive_text()
     except:
         connections.discard(ws)
+
+async def _delayed_fail_commit():
+    await asyncio.sleep(1.5)
+    async with state_lock:
+        from graph import apply_fail_switch_a_commit
+        apply_fail_switch_a_commit(sg)
