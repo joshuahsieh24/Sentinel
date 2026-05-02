@@ -100,3 +100,13 @@ def compute_latent_risks(sg):
 def apply_obstruct_cam2(sg: SentinelGraph):
     sg.devices["cam-2"].obstructed = True
     sg.incident = Incident(summary="Cam-2 obstructed — Loading Dock has no verified visual coverage.", recommendation="Inspect Loading Dock camera for physical obstruction.")
+
+def run_rca(sg: SentinelGraph, newly_offline_cameras: list[str]) -> Optional[Incident]:
+    if len(newly_offline_cameras) < 2: return None
+    successor_sets = [nx.descendants(sg.graph, c) for c in newly_offline_cameras]
+    common = set.intersection(*successor_sets) if successor_sets else set()
+    best = next((n for n in common if not (set(sg.graph.predecessors(n)) & common)), "gateway")
+    dev = sg.devices.get(best); d_type = dev.type if dev else "router"; d_lbl = dev.label if dev else best
+    aff_zones = list(set(z.label for c in newly_offline_cameras for z in sg.zones if c in z.cameras))
+    summary = f"{d_lbl} failure -> {len(newly_offline_cameras)} cameras offline -> {' and '.join(aff_zones)} lost verified coverage."
+    return Incident(summary=summary, recommendation=f"Single point of failure: {d_lbl}. Deploy redundancy.", fix_applicable=True)
