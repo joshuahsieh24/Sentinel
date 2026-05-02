@@ -29,6 +29,12 @@
 </body>
 </html>
 <script>
+function speak(text) { 
+  if (!window.speechSynthesis) return; 
+  const u = new SpeechSynthesisUtterance(text); 
+  window.speechSynthesis.speak(u); 
+} 
+
 let ws;
 let targetScore = null; 
 let displayScore = 0; 
@@ -60,7 +66,7 @@ function connectWS() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'state') targetScore = msg.building_score; renderZones(msg.zones); animateScore();
+    if (msg.type === 'state') targetScore = msg.building_score; renderZones(msg.zones); if (msg.incident) speak(msg.incident.summary); animateScore();
     else if (msg.type === 'event') appendEvent(msg);
   };
 }
