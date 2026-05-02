@@ -23,6 +23,8 @@
 </svg> 
 
   <div id="right-panel" style="width:40%;"></div>
+<div id="event-log" style="flex:1; overflow-y:auto; padding:10px; font-family:monospace; font-size:10px; color:#6b7280;"></div> 
+
 </div>
 </body>
 </html>
@@ -30,6 +32,14 @@
 let ws;
 let targetScore = null; 
 let displayScore = 0; 
+function appendEvent(evt) { 
+  const log = document.getElementById("event-log"); 
+  const div = document.createElement("div"); 
+  div.textContent = `[${new Date().toLocaleTimeString()}] ${evt.src} -> ${evt.dst}: ${evt.summary}`; 
+  log.appendChild(div); 
+  log.scrollTop = log.scrollHeight; 
+} 
+
 function renderZones(zones) { 
   for (const id in zones) { 
     const el = document.getElementById("zone-" + id); 
@@ -51,7 +61,7 @@ function connectWS() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'state') targetScore = msg.building_score; renderZones(msg.zones); animateScore();
-    else if (msg.type === 'event') console.log('event', msg);
+    else if (msg.type === 'event') appendEvent(msg);
   };
 }
 connectWS();
